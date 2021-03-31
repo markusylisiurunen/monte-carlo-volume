@@ -1,14 +1,12 @@
 html,
-body {
-  padding: 0;
+body,
+#__next {
+  background-color: hsl(224, 87%, 3%);
+  height: 100%;
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen,
-    Ubuntu, Cantarell, Fira Sans, Droid Sans, Helvetica Neue, sans-serif;
-}
-
-a {
-  color: inherit;
-  text-decoration: none;
+  overflow: hidden;
+  padding: 0;
+  width: 100%;
 }
 
 * {

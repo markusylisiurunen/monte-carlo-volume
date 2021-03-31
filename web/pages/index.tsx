@@ -1,65 +1,125 @@
-import Head from "next/head";
+import React, { useEffect, useRef } from "react";
 import styles from "../styles/Home.module.css";
+
+type AreaFunction = Record<string, number>;
+type OnPositionChanged = (h: number) => void;
+
+function useShapeAnimation(
+  weight: number,
+  initialHeight: number,
+  areaFunction: AreaFunction
+): { onPositionChanged: (handler: OnPositionChanged) => void } {
+  const _handler = useRef<OnPositionChanged>();
+  const _state = useRef<{ h: number; v: number }>({ h: initialHeight, v: 0 });
+
+  useEffect(() => {
+    let animate = true;
+    let prevAt = Date.now();
+
+    (function tick() {
+      const now = Date.now();
+
+      const volume = 20 * interpolateArea(_state.current.h);
+
+      const forceUp = 9.81 * (volume / 1000);
+      const forceDown = 9.81 * weight;
+
+      const forceNet = forceDown - forceUp;
+
+      const acc = forceNet / weight;
+      const vel = ((now - prevAt) / 1000) * acc;
+
+      _state.current.v += vel;
+
+      _state.current.h -= (now - prevAt) * vel;
+
+      if (_handler.current) {
+        _handler.current(_state.current.h);
+      }
+
+      if (animate) {
+        requestAnimationFrame(tick);
+      }
+    })();
+
+    return () => {
+      animate = false;
+    };
+  }, []);
+
+  function interpolateArea(h: number) {
+    const A = Object.entries(areaFunction)
+      .map(([key, value]) => ({ h: parseFloat(key), area: value }))
+      .sort((a, b) => {
+        if (a.h < b.h) return -1;
+        if (a.h > b.h) return 1;
+        return 0;
+      });
+
+    if (h <= 0) {
+      return 0;
+    }
+
+    if (h >= A[A.length - 1].h) {
+      return A[A.length - 1].area;
+    }
+
+    // TODO: binary search
+    for (let i = 0; i < A.length - 1; i += 1) {
+      const current = A[i];
+      const next = A[i + 1];
+
+      if (current.h <= h && next.h >= h) {
+        return (
+          current.area +
+          ((h - current.h) / (next.h - current.h)) * (next.area - current.area)
+        );
+      }
+    }
+  }
+
+  return {
+    onPositionChanged: (handler) => {
+      _handler.current = handler;
+    },
+  };
+}
+
+const Stats: React.FC = () => {
+  return (
+    <div className={styles.statsContainer}>
+      <span>12.6 cm</span>
+    </div>
+  );
+};
+
+const Shape: React.FC = () => {
+  const { onPositionChanged } = useShapeAnimation(0.1, 10, {
+    "0": 0,
+    "10": 100,
+  });
+
+  const containerRef = useRef<HTMLDivElement>();
+
+  useEffect(() => {
+    onPositionChanged((h) => {
+      if (containerRef.current) {
+        containerRef.current.style.transform = `translateX(-50%) translateY(calc(-50% + ${
+          h / 10000
+        }px))`;
+      }
+    });
+  }, []);
+
+  return <div className={styles.shapeContainer} ref={containerRef}></div>;
+};
 
 export default function Home() {
   return (
     <div className={styles.container}>
-      <Head>
-        <title>Create Next App</title>
-        <link rel="icon" href="/favicon.ico" />
-      </Head>
-
-      <main className={styles.main}>
-        <h1 className={styles.title}>
-          Welcome to <a href="https://nextjs.org">Next.js!</a>
-        </h1>
-
-        <p className={styles.description}>
-          Get started by editing{" "}
-          <code className={styles.code}>pages/index.js</code>
-        </p>
-
-        <div className={styles.grid}>
-          <a href="https://nextjs.org/docs" className={styles.card}>
-            <h3>Documentation &rarr;</h3>
-            <p>Find in-depth information about Next.js features and API.</p>
-          </a>
-
-          <a href="https://nextjs.org/learn" className={styles.card}>
-            <h3>Learn &rarr;</h3>
-            <p>Learn about Next.js in an interactive course with quizzes!</p>
-          </a>
-
-          <a
-            href="https://github.com/vercel/next.js/tree/master/examples"
-            className={styles.card}
-          >
-            <h3>Examples &rarr;</h3>
-            <p>Discover and deploy boilerplate example Next.js projects.</p>
-          </a>
-
-          <a
-            href="https://vercel.com/import?filter=next.js&utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-            className={styles.card}
-          >
-            <h3>Deploy &rarr;</h3>
-            <p>
-              Instantly deploy your Next.js site to a public URL with Vercel.
-            </p>
-          </a>
-        </div>
-      </main>
-
-      <footer className={styles.footer}>
-        <a
-          href="https://vercel.com?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Powered by{" "}
-          <img src="/vercel.svg" alt="Vercel Logo" className={styles.logo} />
-        </a>
-      </footer>
+      <Stats />
+      <Shape />
+      <div className={styles.waterContainer}></div>
     </div>
   );
 }
