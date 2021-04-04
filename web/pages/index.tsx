@@ -1,125 +1,92 @@
-import React, { useEffect, useRef } from "react";
+import fs from "fs";
+import { GetServerSideProps } from "next";
+import path from "path";
+import React, { useEffect, useMemo } from "react";
+import { promisify } from "util";
+import Display from "../src/components/Display";
+import type { Point, Polygon } from "../src/components/Shape";
+import Shape from "../src/components/Shape";
+import useShapeAnimation from "../src/hooks/useShapeAnimation";
 import styles from "../styles/Home.module.css";
 
-type AreaFunction = Record<string, number>;
-type OnPositionChanged = (h: number) => void;
-
-function useShapeAnimation(
-  weight: number,
-  initialHeight: number,
-  areaFunction: AreaFunction
-): { onPositionChanged: (handler: OnPositionChanged) => void } {
-  const _handler = useRef<OnPositionChanged>();
-  const _state = useRef<{ h: number; v: number }>({ h: initialHeight, v: 0 });
-
-  useEffect(() => {
-    let animate = true;
-    let prevAt = Date.now();
-
-    (function tick() {
-      const now = Date.now();
-
-      const volume = 20 * interpolateArea(_state.current.h);
-
-      const forceUp = 9.81 * (volume / 1000);
-      const forceDown = 9.81 * weight;
-
-      const forceNet = forceDown - forceUp;
-
-      const acc = forceNet / weight;
-      const vel = ((now - prevAt) / 1000) * acc;
-
-      _state.current.v += vel;
-
-      _state.current.h -= (now - prevAt) * vel;
-
-      if (_handler.current) {
-        _handler.current(_state.current.h);
-      }
-
-      if (animate) {
-        requestAnimationFrame(tick);
-      }
-    })();
-
-    return () => {
-      animate = false;
-    };
-  }, []);
-
-  function interpolateArea(h: number) {
-    const A = Object.entries(areaFunction)
-      .map(([key, value]) => ({ h: parseFloat(key), area: value }))
-      .sort((a, b) => {
-        if (a.h < b.h) return -1;
-        if (a.h > b.h) return 1;
-        return 0;
-      });
-
-    if (h <= 0) {
-      return 0;
-    }
-
-    if (h >= A[A.length - 1].h) {
-      return A[A.length - 1].area;
-    }
-
-    // TODO: binary search
-    for (let i = 0; i < A.length - 1; i += 1) {
-      const current = A[i];
-      const next = A[i + 1];
-
-      if (current.h <= h && next.h >= h) {
-        return (
-          current.area +
-          ((h - current.h) / (next.h - current.h)) * (next.area - current.area)
-        );
-      }
-    }
-  }
-
-  return {
-    onPositionChanged: (handler) => {
-      _handler.current = handler;
-    },
-  };
-}
-
-const Stats: React.FC = () => {
-  return (
-    <div className={styles.statsContainer}>
-      <span>12.6 cm</span>
-    </div>
-  );
+type HomeProps = {
+  shape: { polygons: Polygon[] };
+  area: Record<string, number>;
+  weight: number;
 };
 
-const Shape: React.FC = () => {
-  const { onPositionChanged } = useShapeAnimation(0.1, 10, {
-    "0": 0,
-    "10": 100,
-  });
+const Home: React.FC<HomeProps> = ({ shape, area, weight }) => {
+  const { onPositionChanged } = useShapeAnimation(weight, -0.2, area);
 
-  const containerRef = useRef<HTMLDivElement>();
+  const _listeners = useMemo<{
+    positionChangedListeners: ((h: number) => void)[];
+  }>(() => ({ positionChangedListeners: [] }), []);
 
   useEffect(() => {
     onPositionChanged((h) => {
-      if (containerRef.current) {
-        containerRef.current.style.transform = `translateX(-50%) translateY(calc(-50% + ${
-          h / 10000
-        }px))`;
-      }
+      _listeners.positionChangedListeners.forEach((listener) => {
+        listener(h);
+      });
     });
-  }, []);
+  }, [_listeners.positionChangedListeners.length]);
 
-  return <div className={styles.shapeContainer} ref={containerRef}></div>;
-};
-
-export default function Home() {
   return (
     <div className={styles.container}>
-      <Stats />
-      <Shape />
+      <Display
+        registerListener={(listener: (h: number) => void) => {
+          _listeners.positionChangedListeners.push(listener);
+        }}
+      />
+      <Shape
+        polygons={shape.polygons}
+        registerListener={(listener: (h: number) => void) => {
+          _listeners.positionChangedListeners.push(listener);
+        }}
+      />
       <div className={styles.waterContainer}></div>
     </div>
   );
-}
+};
+
+export default Home;
+
+export const getServerSideProps: GetServerSideProps<HomeProps> = async () => {
+  const readFile = promisify(fs.readFile);
+
+  const FILE_NAME = "circle_0-2";
+
+  const shapeFile = await readFile(
+    path.resolve(".", "..", "data", `${FILE_NAME}.csv`),
+    { encoding: "utf-8" }
+  );
+
+  const areaFile = await readFile(
+    path.resolve(".", "..", "data", `${FILE_NAME}_out.json`),
+    { encoding: "utf-8" }
+  );
+
+  return {
+    props: {
+      area: JSON.parse(areaFile),
+      shape: {
+        polygons: shapeFile
+          .split("\n")
+          .slice(1)
+          .map((row) => {
+            const coords = row.split(",");
+            const points: Point[] = [];
+
+            for (let i = 0; i < coords.length - 1; i += 2) {
+              points.push({
+                x: parseFloat(coords[i]),
+                y: parseFloat(coords[i + 1]),
+              });
+            }
+
+            return { points };
+          }),
+      },
+      weight: 7.5,
+    },
+  };
+};

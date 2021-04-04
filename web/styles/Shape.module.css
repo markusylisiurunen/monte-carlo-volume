@@ -1,0 +1,19 @@
+.shapeContainer {
+  left: 50%;
+  max-width: 320px;
+  position: absolute;
+  top: 50%;
+  transform: translateX(-50%) translateY(-50%);
+  width: 65%;
+  z-index: 50;
+}
+
+.shapeContainer svg {
+  width: 100%;
+}
+
+.shapeContainer svg polygon {
+  fill: hsla(220, 64%, 64%, 0.24);
+  stroke-width: 1px;
+  stroke: hsla(220, 64%, 64%, 0.8);
+}

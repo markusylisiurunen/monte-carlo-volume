@@ -1,5 +1,5 @@
 """
-Generate a area function A(h) for a shape.
+Generate an area function A(h) for a shape.
 """
 
 import json
@@ -89,8 +89,8 @@ def read_polygons(file_name):
     return polygons
 
 def main(file_name):
-    # a single slice height (cm)
-    SLICE_HEIGHT = 0.5
+    # a single slice height (m)
+    SLICE_HEIGHT = 0.005
 
     # number of samples for Monte Carlo simulation per slice
     SAMPLES_PER_SLICE = 10000
